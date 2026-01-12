@@ -1,0 +1,1 @@
+This is a Excel Parser,In a Excel file if there are records with incomplete data entries if display them as invalid and if the data entries have no blanks then the record is considered valid and stored

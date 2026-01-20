@@ -1,72 +1,39 @@
+using ExcelParser.Services.Persistence;
 using Microsoft.AspNetCore.Mvc;
-using ExcelParser.Data;
-using Microsoft.EntityFrameworkCore;
-
-namespace ExcelParser.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 public class RecordsController : ControllerBase
 {
-    private readonly ExcelDbContext _db;
-    private readonly ILogger<RecordsController> _logger;
+    private readonly IRecordReadService _service;
 
-    public RecordsController(ExcelDbContext db, ILogger<RecordsController> logger)
+    public RecordsController(IRecordReadService service)
     {
-        _db = db;
-        _logger = logger;
-    }
-
-    [HttpGet("complete")]
-    public async Task<IActionResult> GetCompleteRecords()
-    {
-        try
-        {
-            var records = await _db.MainTable.ToListAsync();
-            _logger.LogInformation("Retrieved {Count} complete records", records.Count);
-            return Ok(records);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving complete records");
-            return StatusCode(500, "Error retrieving records");
-        }
-    }
-
-    [HttpGet("incomplete")]
-    public async Task<IActionResult> GetIncompleteRecords()
-    {
-        try
-        {
-            var records = await _db.ErrorTable.ToListAsync();
-            _logger.LogInformation("Retrieved {Count} incomplete records", records.Count);
-            return Ok(records);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving incomplete records");
-            return StatusCode(500, "Error retrieving records");
-        }
+        _service = service;
     }
 
     [HttpGet("summary")]
-    public async Task<IActionResult> GetSummary()
+    public async Task<IActionResult> Summary()
     {
-        try
-        {
-            var completeCount = await _db.MainTable.CountAsync();
-            var incompleteCount = await _db.ErrorTable.CountAsync();
+        return Ok(await _service.GetSummaryAsync());
+    }
 
-            return Ok(new
-            {
-                completeRecords = completeCount,
-                incompleteRecords = incompleteCount
-            });
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error retrieving summary");
-            return StatusCode(500, "Error retrieving summary");
-        }
+    [HttpGet("summary/{uploadId}")]
+    public async Task<IActionResult> Summary(Guid uploadId)
+    {
+        return Ok(await _service.GetSummaryAsync(uploadId));
+    }
+
+    [HttpGet("complete")]
+    public async Task<IActionResult> Complete()
+    {
+        return Ok(await _service.GetCompleteAsync());
+    }
+
+    [HttpDelete("cleanup")]
+    public async Task<IActionResult> Cleanup()
+    {
+        var deletedCount = await _service.CleanupFailedUploadsAsync();
+        return Ok(new { Message = $"Cleaned up {deletedCount} failed uploads" });
     }
 }

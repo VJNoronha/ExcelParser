@@ -25,7 +25,7 @@
         }
         .summary {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 20px;
             margin: 30px 0;
         }
@@ -41,9 +41,6 @@
         }
         .stat-card.incomplete {
             background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
-        }
-        .stat-card.staging {
-            background: linear-gradient(135deg, #fa709a 0%, #fee140 100%);
         }
         .stat-number {
             font-size: 32px;
@@ -137,10 +134,20 @@
         .upload-btn:hover {
             background: #5568d3;
         }
+        .upload-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
         .loading {
             text-align: center;
             padding: 20px;
             color: #666;
+        }
+        .no-data {
+            text-align: center;
+            color: #999;
+            padding: 40px;
+            font-size: 16px;
         }
     </style>
 </head>
@@ -162,145 +169,62 @@
         <div class="upload-section">
             <h3>📁 Upload Excel File</h3>
             <input type="file" id="fileInput" class="file-input" accept=".xlsx,.xls" />
-            <button class="upload-btn" onclick="document.getElementById('fileInput').click()">Choose File</button>
+            <button class="upload-btn" id="uploadBtn" onclick="document.getElementById('fileInput').click()">Choose File</button>
             <p id="uploadStatus" style="margin-top: 10px; color: #666;"></p>
         </div>
 
         <div class="tabs">
-            <button class="tab-btn active" onclick="switchTab('complete')">✅ Complete (Valid Records)</button>
-            <button class="tab-btn" onclick="switchTab('incomplete')">❌ Incomplete (Invalid Records)</button>
+            <button class="tab-btn active" onclick="switchTab('complete', event)">✅ Complete (Valid Records)</button>
+            <button class="tab-btn" onclick="switchTab('incomplete', event)">❌ Incomplete (Invalid Records)</button>
         </div>
 
         <div id="complete" class="tab-content active">
             <h3>Complete Records</h3>
-            <div id="completeTable" class="loading">No records yet. Upload a file to see complete records.</div>
+            <div id="completeTable" class="no-data">No records yet. Upload a file to see complete records.</div>
         </div>
 
         <div id="incomplete" class="tab-content">
             <h3>Incomplete Records</h3>
-            <div id="incompleteTable" class="loading">No records yet. Upload a file to see incomplete records.</div>
+            <div id="incompleteTable" class="no-data">No records yet. Upload a file to see incomplete records.</div>
         </div>
     </div>
 
     <script>
-        const API_BASE = '/api/records';
+const API = "/api/records";
 
-        function switchTab(tab) {
-            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
-            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-            document.getElementById(tab).classList.add('active');
-            event.target.classList.add('active');
-        }
+async function refresh() {
+    const summary = await fetch(`${API}/summary`).then(r => r.json());
+    document.getElementById("completeCount").textContent = summary.completeRecords;
+    document.getElementById("incompleteCount").textContent = summary.incompleteRecords;
 
-        async function loadSummary() {
-            try {
-                const res = await fetch(`${API_BASE}/summary`);
-                const data = await res.json();
-                document.getElementById('completeCount').textContent = data.completeRecords;
-                document.getElementById('incompleteCount').textContent = data.incompleteRecords;
-                document.getElementById('stagingCount').textContent = data.stagingRecords;
-            } catch (e) {
-                console.error('Error loading summary:', e);
-            }
-        }
+    loadTable("complete", "completeTable");
+    loadTable("incomplete", "incompleteTable");
+}
 
-        async function loadRecords(type) {
-            const endpoint = type === 'complete' ? 'complete' : type === 'incomplete' ? 'incomplete' : 'staging';
-            const tableId = type + 'Table';
-            
-            try {
-                const res = await fetch(`${API_BASE}/${endpoint}`);
-                const records = await res.json();
-                
-                if (!records || records.length === 0) {
-                    document.getElementById(tableId).innerHTML = '<p style="text-align: center; color: #999;">No records found</p>';
-                    return;
-                }
+async function loadTable(type, elId) {
+    const data = await fetch(`${API}/${type}`).then(r => r.json());
 
-                let html = '<table><thead><tr>';
-                if (type === 'complete') {
-                    html += '<th>Name</th><th>Email</th><th>Inserted At</th><th>Status</th>';
-                } else if (type === 'incomplete') {
-                    html += '<th>Name</th><th>Email</th><th>Reason</th><th>Logged At</th><th>Status</th>';
-                } else {
-                    html += '<th>Name</th><th>Email</th><th>Created At</th><th>Status</th>';
-                }
-                html += '</tr></thead><tbody>';
+    if (!data.length) {
+        document.getElementById(elId).innerHTML = "<p>No records</p>";
+        return;
+    }
 
-                records.forEach(rec => {
-                    if (type === 'complete') {
-                        html += `<tr>
-                            <td>${rec.name}</td>
-                            <td>${rec.email}</td>
-                            <td>${new Date(rec.insertedAt).toLocaleDateString()}</td>
-                            <td><span class="badge success">Valid</span></td>
-                        </tr>`;
-                    } else if (type === 'incomplete') {
-                        html += `<tr>
-                            <td>${rec.name}</td>
-                            <td>${rec.email}</td>
-                            <td>${rec.reason}</td>
-                            <td>${new Date(rec.loggedAt).toLocaleDateString()}</td>
-                            <td><span class="badge error">Invalid</span></td>
-                        </tr>`;
-                    } else {
-                        html += `<tr>
-                            <td>${rec.id}</td>
-                            <td>${rec.name}</td>
-                            <td>${rec.email}</td>
-                            <td>${new Date(rec.createdAt).toLocaleDateString()}</td>
-                            <td><span class="badge" style="background: #fff3cd; color: #856404;">Pending</span></td>
-                        </tr>`;
-                    }
-                });
+    let rows = data.map(r => `
+        <tr>
+            <td>${r.name}</td>
+            <td>${r.email}</td>
+            <td>${type === "complete" ? "Valid" : r.reason}</td>
+        </tr>
+    `).join("");
 
-                html += '</tbody></table>';
-                document.getElementById(tableId).innerHTML = html;
-            } catch (e) {
-                console.error(`Error loading ${type} records:`, e);
-                document.getElementById(tableId).innerHTML = '<p style="color: red;">Error loading records</p>';
-            }
-        }
+    document.getElementById(elId).innerHTML = `
+        <table>
+            <tr><th>Name</th><th>Email</th><th>Status</th></tr>
+            ${rows}
+        </table>
+    `;
+}
 
-        document.getElementById('fileInput').addEventListener('change', async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const res = await fetch('/api/upload/file', {
-                    method: 'POST',
-                    body: formData
-                });
-                const result = await res.json();
-                
-                if (res.ok) {
-                    document.getElementById('uploadStatus').textContent = '✅ File uploaded successfully! Processing...';
-                    setTimeout(() => {
-                        loadSummary();
-                        loadRecords('complete');
-                        loadRecords('incomplete');
-                    }, 2000);
-                } else {
-                    document.getElementById('uploadStatus').textContent = '❌ Upload failed';
-                }
-            } catch (e) {
-                document.getElementById('uploadStatus').textContent = '❌ Error uploading file';
-                console.error('Upload error:', e);
-            }
-        });
-
-        // Load data on page load
-        window.addEventListener('load', () => {
-            // Don't load data on page load - only load after file upload
-        });
-
-        // Refresh data every 5 seconds
-        setInterval(() => {
-            loadSummary();
-        }, 5000);
-    </script>
-</body>
-</html>
+setInterval(refresh, 5000);
+refresh();
+</script>

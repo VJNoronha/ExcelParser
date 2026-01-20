@@ -1,39 +1,43 @@
-
 using ExcelParser.Data;
 using ExcelParser.Services;
+using ExcelParser.Services.Upload;
+using ExcelParser.Services.Persistence;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+// Database
 builder.Services.AddDbContext<ExcelDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseNpgsql(
+        builder.Configuration.GetConnectionString("DefaultConnection")
+    )
+);
+
+// Services
+builder.Services.AddScoped<IUploadProcessingService, UploadProcessingService>();
+builder.Services.AddScoped<IExcelReader, ExcelReader>();
+builder.Services.AddScoped<IRowValidator, RowValidator>();
+builder.Services.AddScoped<IRecordWriter, RecordWriter>();
+builder.Services.AddScoped<IRecordReadService, RecordReadService>();
+builder.Services.AddScoped<IUploadService, UploadService>();
 
 builder.Services.AddHostedService<ExcelBackgroundService>();
 
+// Controllers
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.PropertyNamingPolicy =
+            System.Text.Json.JsonNamingPolicy.CamelCase;
+    });
+
+// App Pipeline
 var app = builder.Build();
 
-using (var scope = app.Services.CreateScope())
-{
-    var db = scope.ServiceProvider.GetRequiredService<ExcelDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    try
-    {
-        // Use migrations in production; apply pending migrations at startup for dev convenience
-        db.Database.Migrate();
-        logger.LogInformation("Database migrated/applied successfully.");
-    }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Database migration failed.");
-        throw;
-    }
-}
-
-app.UseStaticFiles();
-
-app.MapGet("/", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "wwwroot", "index.html"), "text/html"));
-app.MapGet("/dashboard", () => Results.File(Path.Combine(app.Environment.ContentRootPath, "wwwroot", "dashboard.html"), "text/html"));
+app.UseCors(p => p.AllowAnyOrigin()
+                  .AllowAnyMethod()
+                  .AllowAnyHeader());
 
 app.MapControllers();
+
 app.Run();

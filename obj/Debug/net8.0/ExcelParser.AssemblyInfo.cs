@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ExcelParser")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+db723c17f9080d48275275845d65fd89856e0194")]
 [assembly: System.Reflection.AssemblyProductAttribute("ExcelParser")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ExcelParser")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

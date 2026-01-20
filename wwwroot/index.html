@@ -61,6 +61,38 @@
                 </div>
             </section>
 
+            <section class="dashboard-section">
+                <div class="dashboard-card">
+                    <h2>📊 Records Dashboard</h2>
+
+                    <div class="summary">
+                        <div class="stat-card complete">
+                            <div class="stat-label">Complete Records</div>
+                            <div class="stat-number" id="completeCount">0</div>
+                        </div>
+                        <div class="stat-card incomplete">
+                            <div class="stat-label">Incomplete Records</div>
+                            <div class="stat-number" id="incompleteCount">0</div>
+                        </div>
+                    </div>
+
+                    <div class="tabs">
+                        <button class="tab-btn active" onclick="switchTab('complete', event)">✅ Complete (Valid Records)</button>
+                        <button class="tab-btn" onclick="switchTab('incomplete', event)">❌ Incomplete (Invalid Records)</button>
+                    </div>
+
+                    <div id="complete" class="tab-content active">
+                        <h3>Complete Records</h3>
+                        <div id="completeTable" class="no-data">No records yet. Upload a file to see complete records.</div>
+                    </div>
+
+                    <div id="incomplete" class="tab-content">
+                        <h3>Incomplete Records</h3>
+                        <div id="incompleteTable" class="no-data">No records yet. Upload a file to see incomplete records.</div>
+                    </div>
+                </div>
+            </section>
+
             <section class="info-section">
                 <div class="info-card">
                     <h3>Supported Formats</h3>

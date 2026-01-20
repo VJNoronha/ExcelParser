@@ -7,6 +7,9 @@ class ExcelParserApp {
     init() {
         this.cacheElements();
         this.attachEventListeners();
+        this.loadSummary(); // Load on startup
+        this.refreshDashboard(); // Load dashboard on startup
+        this.startAutoRefresh();
     }
 
     cacheElements() {
@@ -24,14 +27,10 @@ class ExcelParserApp {
     }
 
     attachEventListeners() {
-       
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
-
         this.fileLabel.addEventListener('dragover', (e) => this.handleDragOver(e));
         this.fileLabel.addEventListener('dragleave', (e) => this.handleDragLeave(e));
         this.fileLabel.addEventListener('drop', (e) => this.handleDrop(e));
-
-        
         this.uploadForm.addEventListener('submit', (e) => this.handleSubmit(e));
     }
 
@@ -45,21 +44,21 @@ class ExcelParserApp {
     handleDragOver(event) {
         event.preventDefault();
         event.stopPropagation();
-        this.fileLabel.style.borderColor = 'var(--primary-color)';
-        this.fileLabel.style.backgroundColor = 'var(--primary-light)';
+        this.fileLabel.style.borderColor = '#2563eb';
+        this.fileLabel.style.backgroundColor = 'rgba(37, 99, 235, 0.05)';
     }
 
     handleDragLeave(event) {
         event.preventDefault();
         event.stopPropagation();
-        this.fileLabel.style.borderColor = 'var(--border-color)';
+        this.fileLabel.style.borderColor = '#e5e7eb';
         this.fileLabel.style.backgroundColor = 'rgba(37, 99, 235, 0.02)';
     }
 
     handleDrop(event) {
         event.preventDefault();
         event.stopPropagation();
-        this.fileLabel.style.borderColor = 'var(--border-color)';
+        this.fileLabel.style.borderColor = '#e5e7eb';
         this.fileLabel.style.backgroundColor = 'rgba(37, 99, 235, 0.02)';
 
         const files = event.dataTransfer.files;
@@ -126,9 +125,15 @@ class ExcelParserApp {
             });
 
             if (response.ok) {
-                const result = await response.text();
-                this.showStatus(`✓ ${file.name} uploaded successfully!`, 'success');
+                const result = await response.json();
+                this.showStatus(`✓ ${file.name} uploaded successfully! Processing...`, 'success');
                 this.resetForm();
+                
+                // Reload summary and dashboard after a short delay
+                setTimeout(() => {
+                    this.loadSummary();
+                    this.refreshDashboard();
+                }, 1500);
             } else if (response.status === 400) {
                 this.showStatus('Invalid file or empty file selected', 'error');
             } else {
@@ -140,6 +145,66 @@ class ExcelParserApp {
         } finally {
             this.setLoadingState(false);
         }
+    }
+
+    async fetchData(url) {
+        try {
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            return await response.json();
+        } catch (error) {
+            console.error('Error fetching data:', error);
+            return null;
+        }
+    }
+
+    async loadSummary() {
+        try {
+            console.log('Loading summary...');
+            const response = await fetch(`${this.apiBaseUrl}/records/summary`);
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
+            const data = await response.json();
+            console.log('Summary data:', data);
+            this.updateSummaryDisplay(data);
+        } catch (error) {
+            console.error('Error loading summary:', error);
+        }
+    }
+
+    updateSummaryDisplay(data) {
+        // Remove placeholder
+        const placeholder = this.statusContainer.querySelector('.status-placeholder');
+        if (placeholder) {
+            placeholder.remove();
+        }
+
+        // Remove old summary if exists
+        const oldSummary = this.statusContainer.querySelector('.summary-stats');
+        if (oldSummary) {
+            oldSummary.remove();
+        }
+
+        // Create new summary
+        const summaryDiv = document.createElement('div');
+        summaryDiv.className = 'summary-stats';
+        summaryDiv.innerHTML = `
+            <div class="stat-item success-stat">
+                <span class="stat-label">Complete Records</span>
+                <span class="stat-value">${data.completeRecords || 0}</span>
+            </div>
+            <div class="stat-item error-stat">
+                <span class="stat-label">Incomplete Records</span>
+                <span class="stat-value">${data.incompleteRecords || 0}</span>
+            </div>
+        `;
+
+        this.statusContainer.insertBefore(summaryDiv, this.statusContainer.firstChild);
     }
 
     showStatus(message, type) {
@@ -157,17 +222,11 @@ class ExcelParserApp {
             <span>${message}</span>
         `;
 
-     
-        const placeholder = this.statusContainer.querySelector('.status-placeholder');
-        if (placeholder) {
-            placeholder.remove();
-        }
-
         this.statusContainer.insertBefore(statusDiv, this.statusContainer.firstChild);
 
-       
         setTimeout(() => {
-            statusDiv.style.animation = 'slideIn 0.3s ease reverse';
+            statusDiv.style.opacity = '0';
+            statusDiv.style.transition = 'opacity 0.3s';
             setTimeout(() => statusDiv.remove(), 300);
         }, 6000);
     }
@@ -189,9 +248,65 @@ class ExcelParserApp {
         this.fileName.textContent = 'Click to select or drag and drop';
         this.fileInput.value = '';
     }
+
+    startAutoRefresh() {
+        setInterval(() => {
+            this.loadSummary();
+            this.refreshDashboard();
+        }, 5000);
+    }
+
+    async refreshDashboard() {
+        const summary = await this.fetchData(`${this.apiBaseUrl}/records/summary`);
+        if (summary) {
+            document.getElementById("completeCount").textContent = summary.completeRecords || 0;
+            document.getElementById("incompleteCount").textContent = summary.incompleteRecords || 0;
+        }
+
+        this.loadTable("complete", "completeTable");
+        this.loadTable("incomplete", "incompleteTable");
+    }
+
+    async loadTable(type, elId) {
+        const data = await this.fetchData(`${this.apiBaseUrl}/records/${type}`);
+        const element = document.getElementById(elId);
+
+        if (!data || !data.length) {
+            element.innerHTML = `<p>No records yet. Upload a file to see ${type} records.</p>`;
+            return;
+        }
+
+        let rows = data.map(r => `
+            <tr>
+                <td>${r.name}</td>
+                <td>${r.email}</td>
+                <td>${type === "complete" ? "Valid" : (r.reason || "Invalid")}</td>
+            </tr>
+        `).join("");
+
+        element.innerHTML = `
+            <table>
+                <tr><th>Name</th><th>Email</th><th>Status</th></tr>
+                ${rows}
+            </table>
+        `;
+    }
+
+    switchTab(tabName, event) {
+        // Remove active class from all tabs
+        document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+        // Add active class to clicked tab
+        event.target.classList.add('active');
+        document.getElementById(tabName).classList.add('active');
+    }
 }
 
-
 document.addEventListener('DOMContentLoaded', () => {
-    new ExcelParserApp();
+    window.app = new ExcelParserApp();
 });
+
+function switchTab(tabName, event) {
+    window.app.switchTab(tabName, event);
+}
